@@ -1,0 +1,3 @@
+Calculate radial distribution functions.
+
+Currently only read configuration data from DL_POLY's HISTORY files of Chau's special version.
