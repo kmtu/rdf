@@ -1,0 +1,3 @@
+0.1 #thickness of rdf shell
+1 8 16 #atom type1: initial atom index, steps, total number
+1 8 16 #atom type2: initial atom index, steps, total number
