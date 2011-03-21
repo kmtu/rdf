@@ -187,19 +187,41 @@ CONTAINS
     REAL(KIND=8) :: dummy_real
     REAL(KIND=8), DIMENSION(3) :: box_dim
     do i = 1, SIZE(data_fileid)
-       read(data_fileid, *) num_frames, dummy_int, dummy_int, num_atoms
+       read(data_fileid(i), *) num_frames, dummy_int, dummy_int, num_atoms
        !skip 9 lines
        do j = 1, 9
-          read(data_fileid, *)
+          read(data_fileid(i), *)
        end do
        !read frame by frame
        do j = 1, num_frames
           !read simulation box dimensins
-          read(data_fileid, *) box_dim(1)
-          read(data_fileid, *) dummy_real, box_dim(2)
-          read(data_fileid, *) dummy_real, dummy_real, box_dim(3)
+          read(data_fileid(i), *) box_dim(1)
+          read(data_fileid(i), *) dummy_real, box_dim(2)
+          read(data_fileid(i), *) dummy_real, dummy_real, box_dim(3)
           
        end do
     end do
-  ENDS SUBROUTINE read_data
+  END SUBROUTINE read_data
 END PROGRAM rdf_dlchau
+
+SUBROUTINE wrap_coords(coords, bounds)
+  !This subroutine limit the coords to lie inside values between 0 and bounds
+  IMPLICIT NONE
+  REAL(KIND=8), DIMENSION(:), INTENT(INOUT) :: coords
+  REAL(KIND=8), DIMENSION(:), INTENT(IN) :: bounds
+  INTEGER :: i
+  
+  if (SIZE(coords) /= SIZE(bounds)) then
+     write(*,*) "Wrapping error:"
+     write(*,*) "   Dimension of coords =", SIZE(coords)
+     write(*,*) "   Dimension of bounds =", SIZE(bounds)
+     write(*,*) "They should be the same!"
+     call EXIT(1)
+  end if
+
+  do i = 1, SIZE(coords)
+     if (coords(i) >= bounds(i)) then
+        coords(i) = coords(i) - bounds(i)
+     end if
+  end do
+END SUBROUTINE wrap_coords
