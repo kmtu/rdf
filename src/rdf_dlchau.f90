@@ -10,14 +10,18 @@ PROGRAM rdf_dlchau
   IMPLICIT NONE
   CHARACTER(LEN=128) :: output_filename, control_filename, atqref_filename
   INTEGER, PARAMETER :: output_fileid = 11, control_fileid = 12!, atqref_fileid = 13
+  REAL(KIND=8), PARAMETER :: TRANS_CONST = 2.0**30 !constant for transformin integer data
   CHARACTER(LEN=128), DIMENSION(:), ALLOCATABLE :: data_filename
   INTEGER, DIMENSION(:), ALLOCATABLE :: data_fileid
   
   REAL(KIND=8) :: dr !the thickness of each rdf shell
   LOGICAL :: is_data_filename_assigned, is_atqref_filename_assigned
 
-  INTEGER, DIMENSION(:), ALLOCATABLE :: atom_group1
-  INTEGER, DIMENSION(:), ALLOCATABLE :: atom_group2
+  INTEGER, DIMENSION(:), ALLOCATABLE :: atom_index1, atom_index2
+  INTEGER, DIMENSION(:,:), ALLOCATABLE :: atom_index_combined
+  REAL, DIMENSION(:,:), ALLOCATABLE :: atom_pos1, atom_pos2
+  LOGICAL, DIMENSION(:,:), ALLOCATABLE :: is_same_atom
+  
 
   is_data_filename_assigned = .FALSE.
 !  is_atqref_filename_assigned = .FALSE.
@@ -157,7 +161,7 @@ CONTAINS
 
   SUBROUTINE read_control()
     IMPLICIT NONE
-    INTEGER :: stat, num_atom, initial_index, step, i
+    INTEGER :: stat, num_atom, initial_index, step, i, j, k
     open(UNIT=control_fileid, FILE=control_filename, IOSTAT=stat, STATUS="OLD", ACTION="READ")
     if (stat /=0) then
        write(*,*) "Error: unable to open file: ", TRIM(ADJUSTL(control_filename))
@@ -166,26 +170,61 @@ CONTAINS
     
     read(control_fileid, *) dr
 
-    !read atom_group1
+    !read atom_index1
     read(control_fileid, *) num_atom, initial_index, step
-    ALLOCATE(atom_group1(num_atom))
+    ALLOCATE(atom_index1(num_atom))
+    ALLOCATE(atom_pos1(num_atom, 3))
     do i = 1, num_atom
-       atom_group1(i) = initial_index + (i-1)*step
+       atom_index1(i) = initial_index + (i-1)*step
     end do
 
-    !read atom_group2
+    !read atom_index2
     read(control_fileid, *) num_atom, initial_index, step
-    ALLOCATE(atom_group2(num_atom))
+    ALLOCATE(atom_index2(num_atom))
+    ALLOCATE(atom_pos2(num_atom, 3))    
     do i = 1, num_atom
-       atom_group2(i) = initial_index + (i-1)*step
+       atom_index2(i) = initial_index + (i-1)*step
+    end do
+
+    ALLOCATE(is_same_atom(SIZE(atom_index1), SIZE(atom_index2)))
+    is_same_atom = .FALSE.
+    
+    ALLOCATE(atom_index_combined(SIZE(atom_index1) + SIZE(atom_index2), 2))
+    call bubble_sort_int(atom_index1)
+    call bubble_sort_int(atom_index2)
+    !combine the two indexes in an ascending order
+    j = 1
+    k = 1
+    do i = 1, SIZE(atom_index_combined)
+       if (j <= SIZE(atom_index1) .AND. k <= SIZE(atom_index2)) then
+          if (atom_index1(j) <= atom_index2(k)) then
+             atom_index_combined(i, 1) = atom_index1(j)
+             atom_index_combined(i, 2) = 1
+             j = j + 1
+          else
+             atom_index_combined(i, 1) = atom_index2(k)
+             atom_index_combined(i, 2) = 2
+             k = k + 1
+          end if
+       else if (j > SIZE(atom_index1)) then
+          atom_index_combined(i, 1) = atom_index2(k)
+          atom_index_combined(i, 2) = 2
+          k = k + 1
+       else if (k > SIZE(atom_index2)) then
+          atom_index_combined(i, 1) = atom_index1(j)
+          atom_index_combined(i, 2) = 1
+          j = j + 1
+       end if
     end do
   END SUBROUTINE read_control
 
   SUBROUTINE read_data()
     IMPLICIT NONE
-    INTEGER :: i, j, num_atoms, num_frames, dummy_int
+    INTEGER :: i, j, k, num_atoms, num_frames, dummy_int, current_line, m, n
     REAL(KIND=8) :: dummy_real
     REAL(KIND=8), DIMENSION(3) :: box_dim
+    INTEGER, DIMENSION(3) :: data_int
+    REAL(KIND=8), DIMENSION(3) :: data_real
     do i = 1, SIZE(data_fileid)
        read(data_fileid(i), *) num_frames, dummy_int, dummy_int, num_atoms
        !skip 9 lines
@@ -198,10 +237,47 @@ CONTAINS
           read(data_fileid(i), *) box_dim(1)
           read(data_fileid(i), *) dummy_real, box_dim(2)
           read(data_fileid(i), *) dummy_real, dummy_real, box_dim(3)
-          
+          !read atom records
+          current_line = 1
+          m = 1
+          n = 1
+          do k = 1, SIZE(atom_index_combined)
+             if (k > 1 .AND. atom_index_combined(k,1) == atom_index_combined(k-1,1)) then
+                if (atom_index_combined(k,2) == 1) then
+                   atom_pos1(m,:) = data_real
+                   m = m + 1
+                else
+                   atom_pos2(n,:) = data_real
+                   n = n + 1
+                end if
+                is_same_atom(m-1, n-1) = .TRUE.
+             else
+                call skip_lines(data_fileid(i), atom_index_combined(k,1) - current_line)
+                read(data_fileid(i), *) data_int
+                data_real = DBLE(data_int)*5.0d2/TRANS_CONST
+                if (atom_index_combined(k,2) == 1) then
+                   atom_pos1(m,:) = data_real
+                   m = m + 1
+                else
+                   atom_pos2(n,:) = data_real
+                   n = n + 1
+                end if
+             end if
+          end do
+          !calculate radial distribution number
+          call rdn(atom_pos1, atom_pos2, dr, ***use structure****)
        end do
     end do
   END SUBROUTINE read_data
+
+  SUBROUTINE skip_lines(fileid, n)
+    IMPLICIT NONE
+    INTEGER, INTENT(IN) :: n, fileid
+    INTEGER :: i
+    do i = 1, n
+       read(fileid, *)
+    end do
+  END SUBROUTINE skip_lines
 END PROGRAM rdf_dlchau
 
 SUBROUTINE wrap_coords(coords, bounds)
@@ -225,3 +301,19 @@ SUBROUTINE wrap_coords(coords, bounds)
      end if
   end do
 END SUBROUTINE wrap_coords
+
+SUBROUTINE bubble_sort_int(arr)
+  IMPLICIT NONE
+  INTEGER, INTENT(INOUT) :: arr(:)
+  INTEGER :: i, j, temp
+
+  do i = SIZE(arr), 1, -1
+     do j = 1, i
+        if (arr(j) > arr(j+1)) then
+           temp = arr(j)
+           arr(j) = arr(j+1)
+           arr(j+1) = temp
+        end if
+     end do
+  end do
+END SUBROUTINE bubble_sort_int
