@@ -2,6 +2,11 @@
 !    This program calculates the radial distribution function from 
 !    Chau-made DL_POLY's HISTORY files.
 !
+!    Here, we are calculating the g(r) for atom2 around atom1.
+!    That is, atom1 are always viewed as the central atoms.
+!
+!    atom1 and atom2 may be composed of identical atom groups.
+!
 !     KM Tu 2011                                                            
 !                                                                           
 !***************************************************************************
@@ -21,7 +26,10 @@ PROGRAM rdf_dlchau
   INTEGER, DIMENSION(:,:), ALLOCATABLE :: atom_index_combined
   REAL, DIMENSION(:,:), ALLOCATABLE :: atom_pos1, atom_pos2
   LOGICAL, DIMENSION(:,:), ALLOCATABLE :: is_same_atom
-  
+
+  REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: g !g(r) = rdf
+  INTEGER :: nhist !number of histograms of g(r)
+  REAL(KIND=8), DIMENSION(3) :: box_dim  
 
   is_data_filename_assigned = .FALSE.
 !  is_atqref_filename_assigned = .FALSE.
@@ -32,8 +40,12 @@ PROGRAM rdf_dlchau
   dr = 0.1
 
   call read_command()
+write(*,*) "finish reading command"  
   call read_control()
+write(*,*) "finish reading control"
   call read_data()
+write(*,*) "finish reading data"
+  call output()
   
 CONTAINS
   SUBROUTINE read_command()
@@ -168,34 +180,50 @@ CONTAINS
        call EXIT(1)
     end if
     
-    read(control_fileid, *) dr
+    read(UNIT=control_fileid, FMT=*, IOSTAT=stat) dr
+    if (stat /= 0) then
+       write(*,*) "Unable to read dr in control file: ", TRIM(ADJUSTL(control_filename))
+       call EXIT(1)
+    end if
+    write(*,*) "dr = ",dr
 
     !read atom_index1
     read(control_fileid, *) num_atom, initial_index, step
+    if (stat /= 0) then
+       write(*,*) "Unable to read atom1 info in control file: ", TRIM(ADJUSTL(control_filename))
+       call EXIT(1)
+    end if    
     ALLOCATE(atom_index1(num_atom))
     ALLOCATE(atom_pos1(num_atom, 3))
     do i = 1, num_atom
        atom_index1(i) = initial_index + (i-1)*step
     end do
-
+write(*,*) "atom index 1:", atom_index1
+    
     !read atom_index2
     read(control_fileid, *) num_atom, initial_index, step
+    if (stat /= 0) then
+       write(*,*) "Unable to read atom2 info in control file: ", TRIM(ADJUSTL(control_filename))
+       call EXIT(1)
+    end if        
     ALLOCATE(atom_index2(num_atom))
     ALLOCATE(atom_pos2(num_atom, 3))    
     do i = 1, num_atom
        atom_index2(i) = initial_index + (i-1)*step
     end do
-
+write(*,*) "atom index 2:", atom_index2    
+    
     ALLOCATE(is_same_atom(SIZE(atom_index1), SIZE(atom_index2)))
     is_same_atom = .FALSE.
     
     ALLOCATE(atom_index_combined(SIZE(atom_index1) + SIZE(atom_index2), 2))
-    call bubble_sort_int(atom_index1)
-    call bubble_sort_int(atom_index2)
+    call bubble_sort_int(atom_index1, SIZE(atom_index1))
+    call bubble_sort_int(atom_index2, SIZE(atom_index2))
+write(*,*) "Finish bubble sort"
     !combine the two indexes in an ascending order
     j = 1
     k = 1
-    do i = 1, SIZE(atom_index_combined)
+    do i = 1, SIZE(atom_index_combined(:,1))
        if (j <= SIZE(atom_index1) .AND. k <= SIZE(atom_index2)) then
           if (atom_index1(j) <= atom_index2(k)) then
              atom_index_combined(i, 1) = atom_index1(j)
@@ -216,27 +244,51 @@ CONTAINS
           j = j + 1
        end if
     end do
+write(*,*) "atom_index_combined(:,1) =", atom_index_combined(:,1)
+write(*,*) "atom_index_combined(:,2) =", atom_index_combined(:,2)    
   END SUBROUTINE read_control
 
   SUBROUTINE read_data()
     IMPLICIT NONE
-    INTEGER :: i, j, k, num_atoms, num_frames, dummy_int, current_line, m, n
+    INTEGER :: i, j, k, num_atoms, num_frames, dummy_int, current_line, m, n, stat
     REAL(KIND=8) :: dummy_real
-    REAL(KIND=8), DIMENSION(3) :: box_dim
     INTEGER, DIMENSION(3) :: data_int
     REAL(KIND=8), DIMENSION(3) :: data_real
+write(*,*) "start reading data"    
     do i = 1, SIZE(data_fileid)
        read(data_fileid(i), *) num_frames, dummy_int, dummy_int, num_atoms
-       !skip 9 lines
-       do j = 1, 9
+write(*,*) "num_frames =", num_frames
+write(*,*) "num_atoms =", num_atoms
+
+       !skip 1 line
+       read(data_fileid(i), *)
+       
+       !read the 1st simulation box dimensions
+       !to determine boundaries of g(r) histograms
+       read(data_fileid(i), *) box_dim(1)
+       read(data_fileid(i), *) dummy_real, box_dim(2)
+       read(data_fileid(i), *) dummy_real, dummy_real, box_dim(3)
+       !it is actually much longer than needed.
+       !Since the box size may vary, it is a safer value.
+       nhist = CEILING(MAXVAL(box_dim) / dr)
+       ALLOCATE(g(0:nhist))
+
+       !skip 5 lines
+       do j = 1, 5
           read(data_fileid(i), *)
        end do
+
+       !initialize g(r)
+       call gr(switch=0)
+
        !read frame by frame
        do j = 1, num_frames
-          !read simulation box dimensins
+write(*,*) "start to read frame ",j          
+          !read box size for wrapping coords
           read(data_fileid(i), *) box_dim(1)
           read(data_fileid(i), *) dummy_real, box_dim(2)
           read(data_fileid(i), *) dummy_real, dummy_real, box_dim(3)
+          
           !read atom records
           current_line = 1
           m = 1
@@ -252,8 +304,13 @@ CONTAINS
                 end if
                 is_same_atom(m-1, n-1) = .TRUE.
              else
-                call skip_lines(data_fileid(i), atom_index_combined(k,1) - current_line)
-                read(data_fileid(i), *) data_int
+                call skip_lines(data_fileid(i), atom_index_combined(k,1) - 1)
+                read(UNIT=data_fileid(i), FMT=*, IOSTAT=stat) data_int
+                if (stat /= 0) then
+                   write(*,*) "Error occurs while reading data!"
+                   call EXIT(1)
+                end if
+                current_line = current_line + atom_index_combined(k,1)
                 data_real = DBLE(data_int)*5.0d2/TRANS_CONST
                 if (atom_index_combined(k,2) == 1) then
                    atom_pos1(m,:) = data_real
@@ -264,10 +321,13 @@ CONTAINS
                 end if
              end if
           end do
-          !calculate radial distribution number
-          call rdn(atom_pos1, atom_pos2, dr, ***use structure****)
+          call skip_lines(data_fileid(i), num_atoms - current_line + 1)
+          !sample g(r)
+          call gr(switch=1)
        end do
     end do
+    !determine g(r)
+    call gr(switch=2)
   END SUBROUTINE read_data
 
   SUBROUTINE skip_lines(fileid, n)
@@ -278,16 +338,81 @@ CONTAINS
        read(fileid, *)
     end do
   END SUBROUTINE skip_lines
+
+  !Caluclate rdf, codes from Frenkel(2002)
+  SUBROUTINE gr(switch)
+    IMPLICIT NONE
+    INTEGER, INTENT(IN) :: switch
+    INTEGER, SAVE :: ngr
+    INTEGER :: i, j, ig, nid
+    REAL(KIND=8) :: vb, rho, r
+    REAL(KIND=8), DIMENSION(3) :: xr
+    REAL(KIND=8), DIMENSION(:), SAVE, ALLOCATABLE :: temp_g
+    REAL(KIND=8), PARAMETER :: pi = 3.141592653589793238462643383
+
+    if (switch == 0) then
+       ALLOCATE(temp_g(SIZE(g)))
+       g = 0.0
+       ngr = 0
+       temp_g = 0.0
+    else if (switch == 1) then
+       ngr = ngr + 1
+       temp_g = 0.0
+       do i = 1, SIZE(atom_pos1)
+          do j = 1, SIZE(atom_pos2)
+             if (.NOT. is_same_atom(i,j)) then
+                xr = ABS(atom_pos1(i,:) - atom_pos2(j,:))
+write(*,*) "xr =",xr
+                call wrap_coords(xr, SIZE(xr), box_dim(:)/2.0, SIZE(box_dim))
+                r = SQRT(SUM(xr**2))
+write(*,*) "r =",r                
+                ig = INT(r / dr)
+write(*,*) "ig=r/dr=",ig
+!                if (ig == 0) then
+!                   write(*,*) "dr is too short! Certain pair distance is smaller than dr!"
+!                   call EXIT(1)
+!                end if
+                temp_g(ig) = temp_g(ig) + 1
+             end if
+          end do
+       end do
+       rho = DBLE(SIZE(atom_pos2)) / (box_dim(1) *box_dim(2) * box_dim(3))
+write(*,*) "rho =", rho
+       temp_g = temp_g / rho
+       g = g + temp_g
+    else if (switch == 2) then
+       do i = 1, nhist
+          !volume between bin i+1 and i
+          vb = (4/3) * pi * ((i+1)**3 - i**3) * dr**3
+          g(i) = g(i) / (ngr * SIZE(atom_pos1) * vb)
+       end do
+    end if
+  END SUBROUTINE gr
+
+  SUBROUTINE output()
+    IMPLICIT NONE
+    INTEGER :: stat, i
+    open(UNIT=output_fileid, FILE=output_filename, IOSTAT=stat)
+    if (stat /=0) then
+       write(*,*) "Unable to open output file: ", TRIM(ADJUSTL(output_filename))
+       call EXIT(1)
+    end if
+    do i = 0, nhist
+       write(output_fileid,*) dr*(i + 0.5), g(i)
+    end do
+  END SUBROUTINE output
 END PROGRAM rdf_dlchau
 
-SUBROUTINE wrap_coords(coords, bounds)
-  !This subroutine limit the coords to lie inside values between 0 and bounds
+SUBROUTINE wrap_coords(coords, nc, bounds, nb)
+  !This subroutine transform the coords to lie inside values between 0 and bounds
+  !in a periodic way
   IMPLICIT NONE
-  REAL(KIND=8), DIMENSION(:), INTENT(INOUT) :: coords
-  REAL(KIND=8), DIMENSION(:), INTENT(IN) :: bounds
+  INTEGER, INTENT(IN) :: nc, nb
+  REAL(KIND=8), DIMENSION(nc), INTENT(INOUT) :: coords
+  REAL(KIND=8), DIMENSION(nb), INTENT(IN) :: bounds
   INTEGER :: i
   
-  if (SIZE(coords) /= SIZE(bounds)) then
+  if (nc /= nb) then
      write(*,*) "Wrapping error:"
      write(*,*) "   Dimension of coords =", SIZE(coords)
      write(*,*) "   Dimension of bounds =", SIZE(bounds)
@@ -302,12 +427,14 @@ SUBROUTINE wrap_coords(coords, bounds)
   end do
 END SUBROUTINE wrap_coords
 
-SUBROUTINE bubble_sort_int(arr)
+SUBROUTINE bubble_sort_int(arr, n)
   IMPLICIT NONE
-  INTEGER, INTENT(INOUT) :: arr(:)
-  INTEGER :: i, j, temp
-
-  do i = SIZE(arr), 1, -1
+  INTEGER, DIMENSION(n), INTENT(INOUT) :: arr
+  INTEGER :: i, j, temp, n
+write(*,*) "Start bubble sort"
+write(*,*) "arr=",arr
+  
+  do i = SIZE(arr)-1, 1, -1
      do j = 1, i
         if (arr(j) > arr(j+1)) then
            temp = arr(j)
