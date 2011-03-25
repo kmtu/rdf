@@ -358,25 +358,25 @@ write(*,*) "start to read frame ",j
     else if (switch == 1) then
        ngr = ngr + 1
        temp_g = 0.0
-       do i = 1, SIZE(atom_pos1)
-          do j = 1, SIZE(atom_pos2)
+       do i = 1, SIZE(atom_index1)
+          do j = 1, SIZE(atom_index2)
              if (.NOT. is_same_atom(i,j)) then
                 xr = ABS(atom_pos1(i,:) - atom_pos2(j,:))
-write(*,*) "xr =",xr
+!write(*,*) "xr =",xr
                 call wrap_coords(xr, SIZE(xr), box_dim(:)/2.0, SIZE(box_dim))
                 r = SQRT(SUM(xr**2))
-write(*,*) "r =",r                
+!write(*,*) "r =",r                
                 ig = INT(r / dr)
-write(*,*) "ig=r/dr=",ig
-!                if (ig == 0) then
-!                   write(*,*) "dr is too short! Certain pair distance is smaller than dr!"
+!write(*,*) "ig=r/dr=",ig
+                if (ig == 0) then
+                   write(*,*) "Warning: dr is too short! Certain pair distance is smaller than dr!"
 !                   call EXIT(1)
-!                end if
+                end if
                 temp_g(ig) = temp_g(ig) + 1
              end if
           end do
        end do
-       rho = DBLE(SIZE(atom_pos2)) / (box_dim(1) *box_dim(2) * box_dim(3))
+       rho = DBLE(SIZE(atom_index2)) / (box_dim(1) *box_dim(2) * box_dim(3))
 write(*,*) "rho =", rho
        temp_g = temp_g / rho
        g = g + temp_g
@@ -384,7 +384,7 @@ write(*,*) "rho =", rho
        do i = 1, nhist
           !volume between bin i+1 and i
           vb = (4/3) * pi * ((i+1)**3 - i**3) * dr**3
-          g(i) = g(i) / (ngr * SIZE(atom_pos1) * vb)
+          g(i) = g(i) / (ngr * SIZE(atom_index1) * vb)
        end do
     end if
   END SUBROUTINE gr
