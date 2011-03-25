@@ -361,10 +361,16 @@ write(*,*) "start to read frame ",j
        do i = 1, SIZE(atom_index1)
           do j = 1, SIZE(atom_index2)
              if (.NOT. is_same_atom(i,j)) then
-                xr = ABS(atom_pos1(i,:) - atom_pos2(j,:))
+                xr = atom_pos1(i,:) - atom_pos2(j,:)
 !write(*,*) "xr =",xr
-                call wrap_coords(xr, SIZE(xr), box_dim(:)/2.0, SIZE(box_dim))
+!                call wrap_coords(xr, SIZE(xr), box_dim(:), SIZE(box_dim))
+                !wrap distance (periodic boundary conditions)
+                xr = ABS(xr - box_dim * NINT(xr / box_dim))
                 r = SQRT(SUM(xr**2))
+if (r > 35) then                
+   write(*,*) "r>35, xr=",xr
+   read(*,*)
+   end if
 !write(*,*) "r =",r                
                 ig = INT(r / dr)
 !write(*,*) "ig=r/dr=",ig
@@ -386,6 +392,7 @@ write(*,*) "rho =", rho
           vb = (4/3) * pi * ((i+1)**3 - i**3) * dr**3
           g(i) = g(i) / (ngr * SIZE(atom_index1) * vb)
        end do
+       DEALLOCATE(temp_g)
     end if
   END SUBROUTINE gr
 
@@ -403,29 +410,27 @@ write(*,*) "rho =", rho
   END SUBROUTINE output
 END PROGRAM rdf_dlchau
 
-SUBROUTINE wrap_coords(coords, nc, bounds, nb)
-  !This subroutine transform the coords to lie inside values between 0 and bounds
-  !in a periodic way
-  IMPLICIT NONE
-  INTEGER, INTENT(IN) :: nc, nb
-  REAL(KIND=8), DIMENSION(nc), INTENT(INOUT) :: coords
-  REAL(KIND=8), DIMENSION(nb), INTENT(IN) :: bounds
-  INTEGER :: i
+! SUBROUTINE wrap_coords(coords, nc, bounds, nb)
+!   !This subroutine transform the coords to lie inside values between 0 and bounds/2
+!   !in a periodic way
+!   IMPLICIT NONE
+!   INTEGER, INTENT(IN) :: nc, nb
+!   REAL(KIND=8), DIMENSION(nc), INTENT(INOUT) :: coords
+!   REAL(KIND=8), DIMENSION(nb), INTENT(IN) :: bounds
+!   INTEGER :: i
   
-  if (nc /= nb) then
-     write(*,*) "Wrapping error:"
-     write(*,*) "   Dimension of coords =", SIZE(coords)
-     write(*,*) "   Dimension of bounds =", SIZE(bounds)
-     write(*,*) "They should be the same!"
-     call EXIT(1)
-  end if
+!   if (nc /= nb) then
+!      write(*,*) "Wrapping error:"
+!      write(*,*) "   Dimension of coords =", SIZE(coords)
+!      write(*,*) "   Dimension of bounds =", SIZE(bounds)
+!      write(*,*) "They should be the same!"
+!      call EXIT(1)
+!   end if
 
-  do i = 1, SIZE(coords)
-     if (coords(i) >= bounds(i)) then
-        coords(i) = coords(i) - bounds(i)
-     end if
-  end do
-END SUBROUTINE wrap_coords
+!   do i = 1, nc
+!      coords(i) = coords(i) - bounds(i)*NINT(coords(i)/bounds(i))
+!   end do
+! END SUBROUTINE wrap_coords
 
 SUBROUTINE bubble_sort_int(arr, n)
   IMPLICIT NONE
