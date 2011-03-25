@@ -20,6 +20,8 @@ PROGRAM rdf_dlchau
   INTEGER, DIMENSION(:), ALLOCATABLE :: data_fileid
   
   REAL(KIND=8) :: dr !the thickness of each rdf shell
+  REAL(KIND=8) :: r_max !the largest value of r, larger than that g(r) is useless
+                        !because atoms will interact with their own images
   LOGICAL :: is_data_filename_assigned, is_atqref_filename_assigned
 
   INTEGER, DIMENSION(:), ALLOCATABLE :: atom_index1, atom_index2
@@ -268,9 +270,8 @@ write(*,*) "num_atoms =", num_atoms
        read(data_fileid(i), *) box_dim(1)
        read(data_fileid(i), *) dummy_real, box_dim(2)
        read(data_fileid(i), *) dummy_real, dummy_real, box_dim(3)
-       !it is actually much longer than needed.
-       !Since the box size may vary, it is a safer value.
-       nhist = CEILING(MAXVAL(box_dim) / dr)
+       r_max = MINVAL(box_dim)/2.0
+       nhist = CEILING(r_max/dr)
        ALLOCATE(g(0:nhist))
 
        !skip 5 lines
@@ -290,10 +291,9 @@ write(*,*) "start to read frame ",j
           read(data_fileid(i), *) dummy_real, dummy_real, box_dim(3)
           
           !read atom records
-          current_line = 1
           m = 1
           n = 1
-          do k = 1, SIZE(atom_index_combined)
+          do k = 1, SIZE(atom_index_combined(:,1))
              if (k > 1 .AND. atom_index_combined(k,1) == atom_index_combined(k-1,1)) then
                 if (atom_index_combined(k,2) == 1) then
                    atom_pos1(m,:) = data_real
@@ -304,13 +304,17 @@ write(*,*) "start to read frame ",j
                 end if
                 is_same_atom(m-1, n-1) = .TRUE.
              else
-                call skip_lines(data_fileid(i), atom_index_combined(k,1) - 1)
+                if (k==1) then
+                   call skip_lines(data_fileid(i), atom_index_combined(k,1) - 1)
+                else
+                   call skip_lines(data_fileid(i), atom_index_combined(k,1) - &
+                        & atom_index_combined(k-1,1) - 1)
+                end if
                 read(UNIT=data_fileid(i), FMT=*, IOSTAT=stat) data_int
                 if (stat /= 0) then
                    write(*,*) "Error occurs while reading data!"
                    call EXIT(1)
                 end if
-                current_line = current_line + atom_index_combined(k,1)
                 data_real = DBLE(data_int)*5.0d2/TRANS_CONST
                 if (atom_index_combined(k,2) == 1) then
                    atom_pos1(m,:) = data_real
@@ -321,7 +325,7 @@ write(*,*) "start to read frame ",j
                 end if
              end if
           end do
-          call skip_lines(data_fileid(i), num_atoms - current_line + 1)
+          call skip_lines(data_fileid(i), num_atoms - MAXVAL(atom_index_combined(:,1)))
           !sample g(r)
           call gr(switch=1)
        end do
@@ -367,18 +371,20 @@ write(*,*) "start to read frame ",j
                 !wrap distance (periodic boundary conditions)
                 xr = ABS(xr - box_dim * NINT(xr / box_dim))
                 r = SQRT(SUM(xr**2))
-if (r > 35) then                
-   write(*,*) "r>35, xr=",xr
-   read(*,*)
-   end if
-!write(*,*) "r =",r                
-                ig = INT(r / dr)
+!if (r > 35) then                
+!   write(*,*) "r>35, xr=",xr
+!   read(*,*)
+!   end if
+                !write(*,*) "r =",r
+                if (r < r_max) then
+                   ig = INT(r / dr)
 !write(*,*) "ig=r/dr=",ig
-                if (ig == 0) then
-                   write(*,*) "Warning: dr is too short! Certain pair distance is smaller than dr!"
+!                if (ig == 0) then
+!                   write(*,*) "Warning: dr is too short! Certain pair distance is smaller than dr!"
 !                   call EXIT(1)
+!                end if
+                   temp_g(ig) = temp_g(ig) + 1
                 end if
-                temp_g(ig) = temp_g(ig) + 1
              end if
           end do
        end do
