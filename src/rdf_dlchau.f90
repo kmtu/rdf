@@ -42,11 +42,8 @@ PROGRAM rdf_dlchau
   dr = 0.1
 
   call read_command()
-write(*,*) "finish reading command"  
   call read_control()
-write(*,*) "finish reading control"
   call read_data()
-write(*,*) "finish reading data"
   call output()
   
 CONTAINS
@@ -200,7 +197,7 @@ CONTAINS
     do i = 1, num_atom
        atom_index1(i) = initial_index + (i-1)*step
     end do
-write(*,*) "atom index 1:", atom_index1
+    write(*,*) "atom index 1:", atom_index1
     
     !read atom_index2
     read(control_fileid, *) num_atom, initial_index, step
@@ -213,7 +210,7 @@ write(*,*) "atom index 1:", atom_index1
     do i = 1, num_atom
        atom_index2(i) = initial_index + (i-1)*step
     end do
-write(*,*) "atom index 2:", atom_index2    
+    write(*,*) "atom index 2:", atom_index2    
     
     ALLOCATE(is_same_atom(SIZE(atom_index1), SIZE(atom_index2)))
     is_same_atom = .FALSE.
@@ -221,7 +218,7 @@ write(*,*) "atom index 2:", atom_index2
     ALLOCATE(atom_index_combined(SIZE(atom_index1) + SIZE(atom_index2), 2))
     call bubble_sort_int(atom_index1, SIZE(atom_index1))
     call bubble_sort_int(atom_index2, SIZE(atom_index2))
-write(*,*) "Finish bubble sort"
+
     !combine the two indexes in an ascending order
     j = 1
     k = 1
@@ -246,8 +243,8 @@ write(*,*) "Finish bubble sort"
           j = j + 1
        end if
     end do
-write(*,*) "atom_index_combined(:,1) =", atom_index_combined(:,1)
-write(*,*) "atom_index_combined(:,2) =", atom_index_combined(:,2)    
+!write(*,*) "atom_index_combined(:,1) =", atom_index_combined(:,1)
+!write(*,*) "atom_index_combined(:,2) =", atom_index_combined(:,2)    
   END SUBROUTINE read_control
 
   SUBROUTINE read_data()
@@ -256,11 +253,11 @@ write(*,*) "atom_index_combined(:,2) =", atom_index_combined(:,2)
     REAL(KIND=8) :: dummy_real
     INTEGER, DIMENSION(3) :: data_int
     REAL(KIND=8), DIMENSION(3) :: data_real
-write(*,*) "start reading data"    
     do i = 1, SIZE(data_fileid)
+       write(*,*) "Start reading data file", i, ": ", TRIM(ADJUSTL(data_filename(i)))
        read(data_fileid(i), *) num_frames, dummy_int, dummy_int, num_atoms
-write(*,*) "num_frames =", num_frames
-write(*,*) "num_atoms =", num_atoms
+       write(*,*) "num_frames =", num_frames
+       write(*,*) "num_atoms =", num_atoms
 
        !skip 1 line
        read(data_fileid(i), *)
@@ -270,9 +267,12 @@ write(*,*) "num_atoms =", num_atoms
        read(data_fileid(i), *) box_dim(1)
        read(data_fileid(i), *) dummy_real, box_dim(2)
        read(data_fileid(i), *) dummy_real, dummy_real, box_dim(3)
-       r_max = MINVAL(box_dim)/2.0
-       nhist = CEILING(r_max/dr)
-       ALLOCATE(g(0:nhist))
+
+       if (i == 1) then
+          ALLOCATE(g(0:nhist))
+          r_max = MINVAL(box_dim)/2.0
+          nhist = CEILING(r_max/dr)
+       end if
 
        !skip 5 lines
        do j = 1, 5
@@ -284,7 +284,12 @@ write(*,*) "num_atoms =", num_atoms
 
        !read frame by frame
        do j = 1, num_frames
-write(*,*) "start to read frame ",j          
+          !output current progress
+          if (MOD(j, num_frames/100) == 0) then
+             !T2: move output cursor to the 2nd column
+             write(UNIT=*, FMT="(1X,'Reading %',I3,' of file ',I3)") &
+                  &j*100/num_frames, i
+          end if
           !read box size for wrapping coords
           read(data_fileid(i), *) box_dim(1)
           read(data_fileid(i), *) dummy_real, box_dim(2)
@@ -355,7 +360,9 @@ write(*,*) "start to read frame ",j
     REAL(KIND=8), PARAMETER :: pi = 3.141592653589793238462643383
 
     if (switch == 0) then
-       ALLOCATE(temp_g(SIZE(g)))
+       if (.NOT. ALLOCATED(temp_g)) then
+          ALLOCATE(temp_g(SIZE(g)))
+       end if
        g = 0.0
        ngr = 0
        temp_g = 0.0
@@ -389,7 +396,6 @@ write(*,*) "start to read frame ",j
           end do
        end do
        rho = DBLE(SIZE(atom_index2)) / (box_dim(1) *box_dim(2) * box_dim(3))
-write(*,*) "rho =", rho
        temp_g = temp_g / rho
        g = g + temp_g
     else if (switch == 2) then
@@ -442,8 +448,6 @@ SUBROUTINE bubble_sort_int(arr, n)
   IMPLICIT NONE
   INTEGER, DIMENSION(n), INTENT(INOUT) :: arr
   INTEGER :: i, j, temp, n
-write(*,*) "Start bubble sort"
-write(*,*) "arr=",arr
   
   do i = SIZE(arr)-1, 1, -1
      do j = 1, i
