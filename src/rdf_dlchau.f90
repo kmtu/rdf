@@ -249,7 +249,7 @@ CONTAINS
 
   SUBROUTINE read_data()
     IMPLICIT NONE
-    INTEGER :: i, j, k, num_atoms, num_frames, dummy_int, current_line, m, n, stat
+    INTEGER :: i, j, k, num_atoms, num_frames, dummy_int, current_line, m, n, stat, mark
     REAL(KIND=8) :: dummy_real
     INTEGER, DIMENSION(3) :: data_int
     REAL(KIND=8), DIMENSION(3) :: data_real
@@ -283,12 +283,13 @@ CONTAINS
        call gr(switch=0)
 
        !read frame by frame
+       mark = num_frames/100
        do j = 1, num_frames
           !output current progress
-          if (MOD(j, num_frames/100) == 0) then
+          if (MOD(j, mark) == 0) then
              !T2: move output cursor to the 2nd column
              write(UNIT=*, FMT="(1X,'Reading %',I3,' of file ',I3)") &
-                  &j*100/num_frames, i
+                  &j/mark, i
           end if
           !read box size for wrapping coords
           read(data_fileid(i), *) box_dim(1)
