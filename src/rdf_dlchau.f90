@@ -15,7 +15,7 @@ PROGRAM rdf_dlchau
   IMPLICIT NONE
   CHARACTER(LEN=128) :: output_filename, control_filename, atqref_filename
   INTEGER, PARAMETER :: output_fileid = 11, control_fileid = 12!, atqref_fileid = 13
-  REAL(KIND=8), PARAMETER :: TRANS_CONST = 2.0**30 !constant for transformin integer data
+  REAL(KIND=8), PARAMETER :: TRANS_CONST = 2.0**30 !constant for transforming integer data
   CHARACTER(LEN=128), DIMENSION(:), ALLOCATABLE :: data_filename
   INTEGER, DIMENSION(:), ALLOCATABLE :: data_fileid
   
