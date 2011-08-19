@@ -253,6 +253,7 @@ CONTAINS
     REAL(KIND=8) :: dummy_real
     INTEGER, DIMENSION(3) :: data_int
     REAL(KIND=8), DIMENSION(3) :: data_real
+
     do i = 1, SIZE(data_fileid)
        write(*,*) "Start reading data file", i, ": ", TRIM(ADJUSTL(data_filename(i)))
        read(data_fileid(i), *) num_frames, dummy_int, dummy_int, num_atoms
@@ -272,15 +273,14 @@ CONTAINS
           ALLOCATE(g(0:nhist))
           r_max = MINVAL(box_dim)/2.0
           nhist = CEILING(r_max/dr)
+          !initialize g(r)
+          call gr(switch=0)
        end if
 
        !skip 5 lines
        do j = 1, 5
           read(data_fileid(i), *)
        end do
-
-       !initialize g(r)
-       call gr(switch=0)
 
        !read frame by frame
        mark = num_frames/100
