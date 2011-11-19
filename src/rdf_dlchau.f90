@@ -270,9 +270,9 @@ CONTAINS
        read(data_fileid(i), *) dummy_real, dummy_real, box_dim(3)
 
        if (i == 1) then
-          ALLOCATE(g(0:nhist))
           r_max = MINVAL(box_dim)/2.0
           nhist = CEILING(r_max/dr)
+          ALLOCATE(g(0:nhist))
           !initialize g(r)
           call gr(switch=0)
        end if
