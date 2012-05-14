@@ -27,19 +27,6 @@ if (nargin() > 3)
     endif
 endif
 
-#k = 0;
-#for i = indexes
-#    fileName = strcat(baseFileName, num2str(i, "%02d"))
-#    datafid = fopen(fileName, 'r');
-#    j = 0;
-#    k++;
-#    while(!feof(datafid))
-#        j++;
-#        [r(j), g(j,k)] = fscanf(datafid, "%f %f", "C");
-#    endwhile
-#    fclose(datafid);
-#endfor
-
 for i = indexes
     fileName = strcat(baseFileName, num2str(i, "%02d"))
     data = load(fileName)
