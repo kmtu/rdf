@@ -13,7 +13,7 @@
 
 PROGRAM rdf_dlchau
   IMPLICIT NONE
-  CHARACTER(LEN=128) :: output_filename, control_filename, atqref_filename
+  CHARACTER(LEN=128) :: output_filename, control_filename!, atqref_filename
   INTEGER, PARAMETER :: output_fileid = 11, control_fileid = 12!, atqref_fileid = 13
   REAL(KIND=8), PARAMETER :: TRANS_CONST = 2.0**30 !constant for transforming integer data
   CHARACTER(LEN=128), DIMENSION(:), ALLOCATABLE :: data_filename
@@ -22,7 +22,7 @@ PROGRAM rdf_dlchau
   REAL(KIND=8) :: dr !the thickness of each rdf shell
   REAL(KIND=8) :: r_max !the largest value of r, larger than that g(r) is useless
                         !because atoms will interact with their own images
-  LOGICAL :: is_data_filename_assigned, is_atqref_filename_assigned
+  LOGICAL :: is_data_filename_assigned!, is_atqref_filename_assigned
 
   INTEGER, DIMENSION(:), ALLOCATABLE :: atom_index1, atom_index2
   INTEGER, DIMENSION(:,:), ALLOCATABLE :: atom_index_combined
@@ -112,15 +112,15 @@ CONTAINS
              is_data_filename_assigned = .TRUE.
           end do
 
-       case ('-a')
-          call GET_COMMAND_ARGUMENT(NUMBER=i, VALUE=atqref_filename, STATUS=stat)
-          i = i + 1
-          if (stat /= 0) then
-             write(*,*) "Unable to read the value of argument -a"
-             write(*,*) usage
-             call EXIT(1)
-          end if
-          is_atqref_filename_assigned = .TRUE.
+!       case ('-a')
+!          call GET_COMMAND_ARGUMENT(NUMBER=i, VALUE=atqref_filename, STATUS=stat)
+!          i = i + 1
+!          if (stat /= 0) then
+!             write(*,*) "Unable to read the value of argument -a"
+!             write(*,*) usage
+!             call EXIT(1)
+!          end if
+!          is_atqref_filename_assigned = .TRUE.
           
        case ('-o')
           call GET_COMMAND_ARGUMENT(NUMBER=i, VALUE=output_filename, STATUS=stat)
