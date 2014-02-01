@@ -352,7 +352,7 @@ CONTAINS
 
     if (switch == 0) then
        if (.NOT. ALLOCATED(temp_g)) then
-          ALLOCATE(temp_g(SIZE(g)))
+          ALLOCATE(temp_g(0:SIZE(g)-1))
        end if
        g = 0.0
        ngr = 0
@@ -379,7 +379,7 @@ CONTAINS
        temp_g = temp_g / rho
        g = g + temp_g
     else if (switch == 2) then
-       do i = 1, nhist
+       do i = 0, nhist
           !volume between bin i+1 and i
           vb = (4/3) * pi * ((i+1)**3 - i**3) * dr**3
           g(i) = g(i) / (ngr * SIZE(atom_index1) * vb)
