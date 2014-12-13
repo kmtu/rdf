@@ -381,7 +381,7 @@ CONTAINS
     else if (switch == 2) then
        do i = 0, nhist
           !volume between bin i+1 and i
-          vb = (4/3) * pi * ((i+1)**3 - i**3) * dr**3
+          vb = (4d0/3d0) * pi * ((i+1)**3 - i**3) * dr**3
           g(i) = g(i) / (ngr * SIZE(atom_index1) * vb)
        end do
        DEALLOCATE(temp_g)
